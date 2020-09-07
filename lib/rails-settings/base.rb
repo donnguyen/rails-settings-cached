@@ -78,6 +78,7 @@ module RailsSettings
               record = find_by(var: var_name) || new(var: var_name)
               value = self.send(:_convert_string_to_typeof_value, type, value, separator: separator)
 
+              record.data_type = type
               record.value = value
               record.save!
 
@@ -129,7 +130,7 @@ module RailsSettings
           raise "You cannot use settings before Rails initialize." unless rails_initialized?
           RequestStore.store[:rails_settings_all_settings] ||= begin
             Rails.cache.fetch(self.cache_key, expires_in: 1.week) do
-              vars = unscoped.select("var, value")
+              vars = unscoped.select("id, var, value, file, data_type")
               result = {}
               vars.each { |record| result[record.var] = record.value }
               result.with_indifferent_access

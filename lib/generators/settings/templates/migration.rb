@@ -3,6 +3,8 @@ class CreateSettings < ActiveRecord::Migration<%= migration_version %>
     create_table :settings do |t|
       t.string  :var,        null: false
       t.text    :value,      null: true
+      t.string  :file
+      t.string  :data_type
       t.timestamps
     end
 

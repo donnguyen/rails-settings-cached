@@ -52,6 +52,8 @@ ActiveRecord::Schema.define(version: 1) do
   create_table :settings do |t|
     t.string :var, null: false
     t.text :value
+    t.string :file
+    t.string :data_type
     t.datetime :created_at
     t.datetime :updated_at
   end
