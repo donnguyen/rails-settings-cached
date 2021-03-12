@@ -10,7 +10,7 @@ class BaseTest < ActiveSupport::TestCase
   def direct_update_record(var, value)
     record = find_value(var) || Setting.new(var: var)
     record[:value] = YAML.dump(value)
-    record.save!
+    record.save!(validate: false)
   end
 
   def assert_no_record(var)
@@ -36,24 +36,42 @@ class BaseTest < ActiveSupport::TestCase
   end
 
   test "setting_keys" do
-    assert_equal 11, Setting.keys.size
+    assert_equal 13, Setting.keys.size
     assert_includes(Setting.keys, "host")
     assert_includes(Setting.keys, "readonly_item")
     assert_includes(Setting.keys, "default_tags")
     assert_includes(Setting.keys, "omniauth_google_options")
+
+    assert_equal 11, Setting.editable_keys.size
+    assert_includes(Setting.editable_keys, "host")
+    assert_includes(Setting.editable_keys, "default_tags")
+
+    assert_equal 2, Setting.readonly_keys.size
+    assert_includes(Setting.readonly_keys, "readonly_item")
+    assert_includes(Setting.readonly_keys, "omniauth_google_options")
+  end
+
+  test "get_field" do
+    assert_equal({}, Setting.get_field("foooo"))
+    assert_equal({ key: "host", default: "http://example.com", type: :string, readonly: false },
+                 Setting.get_field("host"))
+    assert_equal(
+      { key: "omniauth_google_options", default: { client_id: "the-client-id", client_secret: "the-client-secret" },
+        type: :hash, readonly: true }, Setting.get_field("omniauth_google_options")
+    )
   end
 
   test "not exist field" do
-    assert_raise(NoMethodError) { Setting.not_exist_method  }
+    assert_raise(NoMethodError) { Setting.not_exist_method }
   end
 
   test "readonly field" do
     assert_equal 100, Setting.readonly_item
-    assert_raise(NoMethodError) { Setting.readonly_item = 1  }
+    assert_raise(NoMethodError) { Setting.readonly_item = 1 }
     assert_kind_of Hash, Setting.omniauth_google_options
     assert_equal "the-client-id", Setting.omniauth_google_options[:client_id]
     assert_equal "the-client-secret", Setting.omniauth_google_options[:client_secret]
-    assert_raise(NoMethodError) { Setting.omniauth_google_options = { foo: 1 }  }
+    assert_raise(NoMethodError) { Setting.omniauth_google_options = { foo: 1 } }
   end
 
   test "value serialize" do
@@ -90,6 +108,10 @@ class BaseTest < ActiveSupport::TestCase
     assert_equal 2, Setting.user_limits
     assert_instance_of Integer, Setting.user_limits
     assert_record_value :user_limits, 2
+
+    assert_equal 2, Setting.default_value_with_block
+    Setting.default_value_with_block = 100
+    assert_equal 100, Setting.default_value_with_block
   end
 
   test "float field" do
@@ -195,6 +217,7 @@ class BaseTest < ActiveSupport::TestCase
     assert_equal "Jason Lee", Setting.smtp_settings["name"]
     assert_record_value :smtp_settings, new_value
 
+    # JSON key
     new_value = {
       "sym" => :symbol,
       "str" => "string",
@@ -203,23 +226,30 @@ class BaseTest < ActiveSupport::TestCase
     Setting.smtp_settings = new_value
     assert_equal new_value.deep_stringify_keys, Setting.smtp_settings
     assert_equal :symbol, Setting.smtp_settings[:sym]
+    assert_equal :symbol, Setting.smtp_settings["sym"]
     assert_equal "string", Setting.smtp_settings["str"]
+    assert_equal "string", Setting.smtp_settings[:str]
     assert_equal 27.72, Setting.smtp_settings["num"]
     assert_record_value :smtp_settings, new_value
+
+    Setting.find_by(var: :smtp_settings).update(value: new_value.to_json)
+    assert_equal({ "sym" => "symbol", "str" => "string", "num" => 27.72 }, Setting.smtp_settings)
+    assert_equal "symbol", Setting.smtp_settings[:sym]
+    assert_equal "symbol", Setting.smtp_settings["sym"]
 
     Setting.smtp_settings = new_value.to_s
     assert_equal new_value.deep_stringify_keys, Setting.smtp_settings
     assert_equal :symbol, Setting.smtp_settings[:sym]
     assert_equal "string", Setting.smtp_settings["str"]
     assert_equal 27.72, Setting.smtp_settings["num"]
-    assert_record_value :smtp_settings, new_value
+    assert_record_value :smtp_settings, ActiveSupport::HashWithIndifferentAccess.new(new_value)
 
     Setting.smtp_settings = new_value.to_yaml
     assert_equal new_value.deep_stringify_keys, Setting.smtp_settings
     assert_equal :symbol, Setting.smtp_settings[:sym]
     assert_equal "string", Setting.smtp_settings["str"]
     assert_equal 27.72, Setting.smtp_settings["num"]
-    assert_record_value :smtp_settings, new_value
+    assert_record_value :smtp_settings, ActiveSupport::HashWithIndifferentAccess.new(new_value)
   end
 
   test "boolean field" do
@@ -277,8 +307,8 @@ class BaseTest < ActiveSupport::TestCase
 
   test "array with separator" do
     value = <<~TIP
-    Hello this is first line, and have comma.
-    This is second line.
+      Hello this is first line, and have comma.
+      This is second line.
     TIP
     direct_update_record(:tips, value)
 

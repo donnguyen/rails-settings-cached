@@ -17,17 +17,21 @@ SimpleCov.start
 Minitest.backtrace_filter = Minitest::BacktraceFilter.new
 
 require_relative "./models/setting"
+require_relative "./models/no_table_setting"
+require_relative "./models/no_connection_setting"
 
 # Hit readonly field before Rails initialize
 Setting.readonly_item
 Setting.omniauth_google_options
+NoConnectionSetting.bar
 
 class TestApplication < Rails::Application
+  puts "NoConnectionSetting.bar = #{NoConnectionSetting.bar}"
 end
 
 module Rails
   def self.root
-    Pathname.new(File.expand_path("../", __FILE__))
+    Pathname.new(File.expand_path(__dir__))
   end
 
   def self.cache
@@ -69,7 +73,7 @@ class ActiveSupport::TestCase
     queries = []
 
     counter_f = lambda do |_name, _started, _finished, _unique_id, payload|
-      if !payload[:name].in? %w(CACHE SCHEMA)
+      unless payload[:name].in? %w[CACHE SCHEMA]
         queries_count += 1
         queries << payload
        end
@@ -82,5 +86,16 @@ class ActiveSupport::TestCase
 
   def assert_no_queries(&block)
     assert_number_of_queries 0, &block
+  end
+
+  def assert_errors_on(model, key, messages)
+    messages = Array(messages) unless messages.is_a?(Array)
+    assert_equal true, model.errors.has_key?(key), "#{model.errors.messages.keys} not include #{key}"
+    assert_equal messages, model.errors.full_messages_for(key)
+  end
+
+  def assert_raise_with_validation_message(message)
+    ex = assert_raise(ActiveRecord::RecordInvalid) {yield}
+    assert_equal message, ex.message
   end
 end
